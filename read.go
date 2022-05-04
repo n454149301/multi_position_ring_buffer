@@ -26,6 +26,7 @@ func (self *MultiPositionRingBuffer) Read(data []byte) (n int, err error) {
 
 	self.Mu.RUnlock()
 	self.Mu.Lock()
+	defer self.Mu.Unlock()
 	if self.W > self.R {
 		// 如果写位置在读前面，直接读取
 		n = self.W - self.R
@@ -33,7 +34,6 @@ func (self *MultiPositionRingBuffer) Read(data []byte) (n int, err error) {
 		copy(data[0:], self.Buff[self.R:self.R+n])
 		self.R = self.W
 		self.RSeq += uint64(n)
-		self.Mu.Unlock()
 		return
 	} else {
 		// 如果写位置在读后面或者相同，到buff结尾读取为数据前半段，从0位置到W位置是数据后半段
@@ -46,7 +46,6 @@ func (self *MultiPositionRingBuffer) Read(data []byte) (n int, err error) {
 
 		self.R = self.W
 		self.RSeq += uint64(n)
-		self.Mu.Unlock()
 		return n, nil
 	}
 }
