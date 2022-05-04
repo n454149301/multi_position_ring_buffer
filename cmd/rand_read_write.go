@@ -13,6 +13,7 @@ import (
 
 func main() {
 	tmpBuf := multi_position_ring_buffer.New(100)
+	end := make(chan bool, 1)
 
 	// 读取测试
 	go func() {
@@ -35,9 +36,10 @@ func main() {
 				rNum += readNum / 7
 				if rNum*7 >= 10000 {
 					fmt.Println("read:", string(readTmp), rNum, readNum, readNum/7)
-					tmpBuf.Close()
+					// tmpBuf.Close()
 					fmt.Println("close buf", tmpBuf.Err)
 					rm.Unlock()
+					end <- true
 					break
 				}
 				rm.Unlock()
@@ -87,5 +89,5 @@ func main() {
 		}
 	}()
 
-	select {}
+	<-end
 }

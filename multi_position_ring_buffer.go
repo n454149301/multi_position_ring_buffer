@@ -42,6 +42,6 @@ func New(size int) *MultiPositionRingBuffer {
 
 func (self *MultiPositionRingBuffer) Close() {
 	self.Mu.Lock()
-	defer self.Mu.Unlock()
 	self.Err = io.ErrClosedPipe
+	self.Mu.Unlock()
 }

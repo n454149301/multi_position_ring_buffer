@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
+func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 	self.Mu.RLock()
 	if self.Err != nil {
 		self.Mu.RUnlock()
@@ -31,9 +31,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 	realData := data[8:]
 	realDataLen := len(realData)
 
-	self.Mu.Lock()
-	defer self.Mu.Unlock()
-
+	self.Mu.RLock()
 	// 根据数据序号判断序号写入位置
 	var wBeginPos int
 	var avail int
@@ -43,6 +41,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 		// 判断数据存活空间是否足够
 		if avail = self.CheckAvailData(wBeginPos, realDataLen, tmpSeq); avail == 0 {
 			// fmt.Println("1 avail == 0", wBeginPos, realDataLen)
+			self.Mu.RUnlock()
 			return 0, nil
 		}
 		// 提前默认写入数据成功，调整所有控制标记位置
@@ -50,13 +49,19 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 			// 如果写入数据在读取数据之前
 			c1 := self.Size - self.W
 			if c1 >= realDataLen {
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				// 如果写入数据长度小于等于剩余缓存长度
 				self.W += realDataLen
 			} else {
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				// 如果写入数据长度大于剩余缓存长度
 				self.W = realDataLen - c1
 			}
 		} else {
+			self.Mu.RUnlock()
+			self.Mu.Lock()
 			// 如果写入数据在读取数据之后
 			self.W += realDataLen
 		}
@@ -77,6 +82,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 		// 判断数据存活空间是否足够
 		if avail = self.CheckAvailData(wBeginPos, realDataLen, tmpSeq); avail == 0 {
 			// fmt.Println("2 avail == 0", wBeginPos, realDataLen)
+			self.Mu.RUnlock()
 			return 0, nil
 		}
 		// 判断序号缓存表是否存在该结束序号。也就是该数据碎片填充之后，是否存在小于该数据碎片的碎片存在。
@@ -90,9 +96,13 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 					Begin:    wBeginPos,
 					End:      (wBeginPos + realDataLen) % self.Size,
 				}
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				self.WBeginCache[tmpSeq] = newPart
 				self.WEndCache[tmpSeq+uint64(realDataLen)] = newPart
 			} else {
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				// 如果存在，该碎片与大于该数据碎片的碎片合并
 				delete(self.WBeginCache, tmpBeginPart.BeginSeq)
 				tmpBeginPart.BeginSeq = tmpSeq
@@ -103,6 +113,8 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 		} else {
 			// 如果存在，判断是否存在开始序号。也就是该数据碎片填充之后，是否存在大于该数据碎片的碎片存在。
 			if tmpBeginPart, ok := self.WBeginCache[tmpSeq+uint64(realDataLen)]; !ok {
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				// 如果不存在，该碎片与小于该数据碎片的碎片合并
 				delete(self.WEndCache, tmpEndPart.EndSeq)
 				tmpEndPart.EndSeq = tmpSeq + uint64(realDataLen)
@@ -110,6 +122,8 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 				self.WEndCache[tmpEndPart.EndSeq] = tmpEndPart
 				self.WBeginCache[tmpEndPart.BeginSeq] = tmpEndPart
 			} else {
+				self.Mu.RUnlock()
+				self.Mu.Lock()
 				// 如果存在，让大于该数据碎片的碎片与小于该数据碎片的碎片合并
 				delete(self.WEndCache, tmpEndPart.EndSeq)
 				delete(self.WBeginCache, tmpBeginPart.BeginSeq)
@@ -122,6 +136,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 	} else {
 		// 如果写入序号比预期写入序号小，说明数据已经被写入读取过，则直接返回
 		// fmt.Println("self.WSeq < tmpSeq")
+		self.Mu.RUnlock()
 		return dataLen, nil
 	}
 
@@ -143,6 +158,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (int, error) {
 		copy(self.Buff[wBeginPos:], realData)
 	}
 
+	self.Mu.Unlock()
 	// fmt.Println("write ok", dataLen)
 	return dataLen, nil
 }
