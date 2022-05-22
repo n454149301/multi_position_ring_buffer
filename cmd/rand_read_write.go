@@ -33,15 +33,17 @@ func main() {
 					panic(fmt.Sprintf("readNum: %d %s", readNum, string(readTmp)))
 				}
 				rm.Lock()
-				rNum += readNum / 7
-				if rNum*7 >= 10000 {
-					fmt.Println("read:", string(readTmp), rNum, readNum, readNum/7)
-					// tmpBuf.Close()
-					fmt.Println("close buf", tmpBuf.Err)
-					rm.Unlock()
-					end <- true
-					break
-				}
+				rNum += readNum
+				/*
+					if rNum > 980000 {
+						fmt.Println("read:", string(readTmp), rNum, readNum, readNum/7)
+						// tmpBuf.Close()
+						fmt.Println("close buf", tmpBuf.Err)
+						rm.Unlock()
+						end <- true
+						break
+					}
+				*/
 				rm.Unlock()
 				fmt.Println("read:", string(readTmp), rNum, readNum, readNum/7)
 			}
@@ -78,7 +80,7 @@ func main() {
 				muMap = map[uint64]bool{}
 				bigNum++
 				fmt.Println("end", bigNum)
-				if (bigNum)*14 > 10000 {
+				if bigNum >= 10000 {
 					mu.Unlock()
 					break
 				}
