@@ -89,5 +89,41 @@ func main() {
 		}
 	}()
 
+	go func() {
+		for {
+			tmpRandNum := uint64(rand.Intn(14))
+			mu.Lock()
+			muMap[tmpRandNum] = true
+			mu.Unlock()
+
+			// test data
+			dataSeqByte := make([]byte, 8)
+			binary.BigEndian.PutUint64(dataSeqByte, (tmpRandNum*7 + bigNum*14))
+			tmpData := bytes.Join([][]byte{dataSeqByte, []byte("1234567")}, []byte{})
+
+			if wNum, err := tmpBuf.Write(tmpData); err != nil {
+				panic(err)
+			} else if wNum == 0 {
+				// 缓存区满了
+				time.Sleep(time.Second / 1000)
+				continue
+			}
+
+			mu.Lock()
+			if len(muMap) == 14 {
+				muMap = map[uint64]bool{}
+				bigNum++
+				fmt.Println("end", bigNum)
+				if (bigNum)*14 > 10000 {
+					mu.Unlock()
+					break
+				}
+			}
+			mu.Unlock()
+			// fmt.Println(tmpBuf.Buff, tmpBuf.Size)
+			// time.Sleep(time.Second / 100)
+		}
+	}()
+
 	<-end
 }
