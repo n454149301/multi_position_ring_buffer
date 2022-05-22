@@ -1,8 +1,14 @@
 package multi_position_ring_buffer
 
+/*
+#include <stdlib.h>
+*/
+import "C"
+
 import (
 	"io"
 	"sync"
+	"unsafe"
 )
 
 type MultiPositionRingPart struct {
@@ -13,11 +19,12 @@ type MultiPositionRingPart struct {
 }
 
 type MultiPositionRingBuffer struct {
-	Buff []byte
-	Size int
-	R    int
-	RSeq uint64
-	W    int
+	BuffP unsafe.Pointer
+	Buff  []byte
+	Size  int
+	R     int
+	RSeq  uint64
+	W     int
 	// key为序号断点开始位置，value为循环缓存区一个断点结构
 	WBeginCache map[uint64]*MultiPositionRingPart
 	// key为序号断点结束位置，value为循环缓存区一个断点结构
@@ -29,8 +36,10 @@ type MultiPositionRingBuffer struct {
 }
 
 func New(size int) *MultiPositionRingBuffer {
+	p := C.malloc(C.ulong(size))
 	return &MultiPositionRingBuffer{
-		Buff:        make([]byte, size),
+		BuffP:       p,
+		Buff:        C.GoBytes(p, C.int(size)),
 		Size:        size,
 		R:           0,
 		W:           0,
@@ -42,6 +51,7 @@ func New(size int) *MultiPositionRingBuffer {
 
 func (self *MultiPositionRingBuffer) Close() {
 	self.Mu.Lock()
+	C.free(self.BuffP)
 	self.Err = io.ErrClosedPipe
 	self.Mu.Unlock()
 }
