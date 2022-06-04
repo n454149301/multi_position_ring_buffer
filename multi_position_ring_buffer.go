@@ -51,7 +51,10 @@ func New(size int) *MultiPositionRingBuffer {
 
 func (self *MultiPositionRingBuffer) Close() {
 	self.Mu.Lock()
-	C.free(self.BuffP)
+	if self.BuffP != nil {
+		C.free(self.BuffP)
+		self.BuffP = nil
+	}
 	self.Err = io.ErrClosedPipe
 	self.Mu.Unlock()
 }
