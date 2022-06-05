@@ -21,6 +21,7 @@ func main() {
 		rNum := 0
 		for {
 			// time.Sleep(time.Second / 100)
+			fmt.Println("read once")
 			readTmp := make([]byte, 100)
 			if readNum, err := tmpBuf.Read(readTmp); err != nil {
 				panic(err)
@@ -67,6 +68,7 @@ func main() {
 			binary.BigEndian.PutUint64(dataSeqByte, (tmpRandNum*7 + bigNum*14))
 			tmpData := bytes.Join([][]byte{dataSeqByte, []byte("1234567")}, []byte{})
 
+			time.Sleep(time.Second)
 			if wNum, err := tmpBuf.Write(tmpData); err != nil {
 				panic(err)
 			} else if wNum == 0 {
@@ -80,6 +82,9 @@ func main() {
 				muMap = map[uint64]bool{}
 				bigNum++
 				fmt.Println("end", bigNum)
+				if (bigNum) == 200 {
+					tmpBuf.Close()
+				}
 				if bigNum >= 10000 {
 					mu.Unlock()
 					break
@@ -103,6 +108,7 @@ func main() {
 			binary.BigEndian.PutUint64(dataSeqByte, (tmpRandNum*7 + bigNum*14))
 			tmpData := bytes.Join([][]byte{dataSeqByte, []byte("1234567")}, []byte{})
 
+			time.Sleep(time.Second)
 			if wNum, err := tmpBuf.Write(tmpData); err != nil {
 				panic(err)
 			} else if wNum == 0 {
@@ -116,6 +122,9 @@ func main() {
 				muMap = map[uint64]bool{}
 				bigNum++
 				fmt.Println("end", bigNum)
+				if (bigNum) == 200 {
+					tmpBuf.Close()
+				}
 				if (bigNum)*14 > 10000 {
 					mu.Unlock()
 					break

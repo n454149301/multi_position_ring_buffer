@@ -11,13 +11,20 @@ func (self *MultiPositionRingBuffer) Read(data []byte) (n int, err error) {
 	errI := self.Err.Load()
 	if errI != nil {
 		var coverErrOk bool
-		if err, coverErrOk = errI.(error); coverErrOk {
+		var errPtr *error
+		if errPtr, coverErrOk = errI.(*error); coverErrOk {
+			err = *errPtr
+			// err = errors.New("Load read error :" + err.Error())
 			return
 		} else {
 			err = errors.New("Load error cover failed:" + fmt.Sprint(err))
 			return
 		}
 	}
+
+	// fmt.Println("self.ChLock unlock begin")
+	<-self.ChLock
+	// fmt.Println("self.ChLock unlock end")
 
 	// 如果读取buff小于缓存区大小，返回错误
 	if int32(len(data)) < atomic.LoadInt32(&self.Size) {

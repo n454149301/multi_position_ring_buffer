@@ -33,6 +33,9 @@ type MultiPositionRingBuffer struct {
 	WSeq      uint64
 	Mu        sync.RWMutex
 
+	// 添加状态锁，如果没有人写入，则读被阻塞
+	ChLock chan bool
+
 	// Err error
 	Err atomic.Value
 }
@@ -48,6 +51,7 @@ func New(size int) *MultiPositionRingBuffer {
 		WBeginCache: make(map[uint64]*MultiPositionRingPart),
 		WEndCache:   make(map[uint64]*MultiPositionRingPart),
 		WSeq:        0,
+		ChLock:      make(chan bool, 1),
 	}
 }
 
@@ -59,5 +63,11 @@ func (self *MultiPositionRingBuffer) Close() {
 		self.BuffP = nil
 	}
 
-	self.Err.Store(io.ErrClosedPipe)
+	if len(self.ChLock) == 0 {
+		// fmt.Println("self.ChLock lock begin")
+		self.ChLock <- true
+		// fmt.Println("self.ChLock lock end")
+	}
+
+	self.Err.Store(&io.ErrClosedPipe)
 }

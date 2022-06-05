@@ -13,7 +13,10 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 	errI := self.Err.Load()
 	if errI != nil {
 		var coverErrOk bool
-		if err, coverErrOk = errI.(error); coverErrOk {
+		var errPtr *error
+		if errPtr, coverErrOk = errI.(*error); coverErrOk {
+			err = *errPtr
+			// err = errors.New("Load write error :" + err.Error())
 			return
 		} else {
 			err = errors.New("Load error cover failed:" + fmt.Sprint(err))
@@ -148,6 +151,12 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 	} else {
 		// 如果写入位置在读取位置之前
 		copy(self.Buff[wBeginPos:], realData)
+	}
+
+	if len(self.ChLock) == 0 {
+		// fmt.Println("self.ChLock lock begin")
+		self.ChLock <- true
+		// fmt.Println("self.ChLock lock end")
 	}
 
 	// fmt.Println("write ok", dataLen)
