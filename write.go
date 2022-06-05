@@ -3,16 +3,23 @@ package multi_position_ring_buffer
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
+	"sync/atomic"
 )
 
 func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
-	self.Mu.RLock()
-	if self.Err != nil {
-		self.Mu.RUnlock()
-		return 0, self.Err
+	errI := self.Err.Load()
+	if errI != nil {
+		var coverErrOk bool
+		if err, coverErrOk = errI.(error); coverErrOk {
+			return
+		} else {
+			err = errors.New("Load error cover failed:" + fmt.Sprint(err))
+			return
+		}
 	}
-	self.Mu.RUnlock()
 
 	// 如果写入数据为空，则返回
 	dataLen := len(data)
@@ -29,16 +36,17 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 	var tmpSeq uint64
 	binary.Read(bytes.NewReader(data[:8]), binary.BigEndian, &tmpSeq)
 	realData := data[8:]
-	realDataLen := len(realData)
+	realDataLen := int32(len(realData))
 
 	self.Mu.Lock()
 	defer self.Mu.Unlock()
+
 	// 根据数据序号判断序号写入位置
-	var wBeginPos int
-	var avail int
-	if self.WSeq == tmpSeq {
+	var wBeginPos int32
+	var avail int32
+	if atomic.LoadUint64(&self.WSeq) == tmpSeq {
 		// 如果写入序号从预期写入序号位置开始，则直接0位置写入
-		wBeginPos = self.W
+		wBeginPos = atomic.LoadInt32(&self.W)
 		// 判断数据存活空间是否足够
 		if avail = self.CheckAvailData(wBeginPos, realDataLen, tmpSeq); avail == 0 {
 			// fmt.Println("1 avail == 0", wBeginPos, realDataLen)
@@ -63,7 +71,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 		// 判断写入数据后，是否把数据空洞填上了
 		if tmpPart, ok := self.WBeginCache[tmpSeq+uint64(realDataLen)]; ok {
 			// 如果数据空洞填上了，序号移动到空洞后最后一个位置
-			self.W = tmpPart.End
+			self.W = int32(tmpPart.End)
 			// fmt.Println("self.W", self.W)
 			self.WSeq = tmpPart.EndSeq
 			// 清理被填上的数据空洞的序号缓存表
@@ -72,7 +80,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 		}
 	} else if self.WSeq < tmpSeq {
 		// 如果写入序号比预期写入序号大，则存在数据空洞，跳过数据空洞的部分后写入
-		wBeginPos = int((uint64(self.W) + tmpSeq - self.WSeq) % uint64(self.Size))
+		wBeginPos = int32((uint64(self.W) + tmpSeq - self.WSeq) % uint64(self.Size))
 		// 判断数据存活空间是否足够
 		if avail = self.CheckAvailData(wBeginPos, realDataLen, tmpSeq); avail == 0 {
 			// fmt.Println("2 avail == 0", wBeginPos, realDataLen)
@@ -86,7 +94,7 @@ func (self *MultiPositionRingBuffer) Write(data []byte) (n int, err error) {
 				newPart := &MultiPositionRingPart{
 					BeginSeq: tmpSeq,
 					EndSeq:   tmpSeq + uint64(realDataLen),
-					Begin:    wBeginPos,
+					Begin:    int32(wBeginPos),
 					End:      (wBeginPos + realDataLen) % self.Size,
 				}
 				self.WBeginCache[tmpSeq] = newPart

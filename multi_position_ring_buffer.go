@@ -8,23 +8,24 @@ import "C"
 import (
 	"io"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
 type MultiPositionRingPart struct {
 	BeginSeq uint64
 	EndSeq   uint64
-	Begin    int
-	End      int
+	Begin    int32
+	End      int32
 }
 
 type MultiPositionRingBuffer struct {
 	BuffP unsafe.Pointer
 	Buff  []byte
-	Size  int
-	R     int
+	Size  int32
+	R     int32
 	RSeq  uint64
-	W     int
+	W     int32
 	// key为序号断点开始位置，value为循环缓存区一个断点结构
 	WBeginCache map[uint64]*MultiPositionRingPart
 	// key为序号断点结束位置，value为循环缓存区一个断点结构
@@ -32,7 +33,8 @@ type MultiPositionRingBuffer struct {
 	WSeq      uint64
 	Mu        sync.RWMutex
 
-	Err error
+	// Err error
+	Err atomic.Value
 }
 
 func New(size int) *MultiPositionRingBuffer {
@@ -40,7 +42,7 @@ func New(size int) *MultiPositionRingBuffer {
 	return &MultiPositionRingBuffer{
 		BuffP:       p,
 		Buff:        C.GoBytes(p, C.int(size)),
-		Size:        size,
+		Size:        int32(size),
 		R:           0,
 		W:           0,
 		WBeginCache: make(map[uint64]*MultiPositionRingPart),
@@ -51,10 +53,11 @@ func New(size int) *MultiPositionRingBuffer {
 
 func (self *MultiPositionRingBuffer) Close() {
 	self.Mu.Lock()
+	defer self.Mu.Unlock()
 	if self.BuffP != nil {
 		C.free(self.BuffP)
 		self.BuffP = nil
 	}
-	self.Err = io.ErrClosedPipe
-	self.Mu.Unlock()
+
+	self.Err.Store(io.ErrClosedPipe)
 }
