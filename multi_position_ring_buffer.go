@@ -71,3 +71,11 @@ func (self *MultiPositionRingBuffer) Close() {
 
 	self.Err.Store(&io.ErrClosedPipe)
 }
+
+func (self *MultiPositionRingBuffer) Flush() {
+	if len(self.ChLock) == 0 {
+		// fmt.Println("self.ChLock lock begin")
+		self.ChLock <- true
+		// fmt.Println("self.ChLock lock end")
+	}
+}
